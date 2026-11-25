@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLASS FEEDBACK</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI","Noto Sans KR",sans-serif;background:#f4f6fb;color:#1f2937;min-height:100vh}
+  header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px}
+  h1{margin:0;font-size:1.3rem;letter-spacing:.12em;color:#4338ca}
+  button{font:inherit;cursor:pointer;border:0;border-radius:12px}
+  .link{background:#fff;padding:8px 14px;border:1px solid #d1d5db;color:#374151}
+  main{max-width:640px;margin:0 auto;padding:24px 20px;text-align:center}
+  .hidden{display:none!important}
+  #student h2{margin:12vh 0 32px;font-size:1.6rem}
+  .votes{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .vote{background:#fff;padding:24px 20px;width:170px;font-size:1.3rem;box-shadow:0 2px 8px rgba(0,0,0,.08);transition:transform .15s}
+  .vote:hover{transform:translateY(-3px)}
+  .vote:disabled{opacity:.5;cursor:default;transform:none}
+  #msg{margin-top:28px;font-weight:600;min-height:1.5em}
+  .ok{color:#059669}.err{color:#dc2626}
+  form{background:#fff;padding:24px;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:12px;margin-top:8vh}
+  input{font:inherit;padding:12px;border:1px solid #d1d5db;border-radius:10px}
+  .primary{background:#4338ca;color:#fff;padding:12px 18px}
+  .danger{background:#dc2626;color:#fff;padding:10px 16px}
+  .gray{background:#e5e7eb;padding:10px 16px}
+  .total{font-size:1.2rem;margin:16px 0}
+  .row{text-align:left;margin:16px 0}
+  .bar{background:#e5e7eb;border-radius:8px;height:26px;overflow:hidden;margin-top:6px}
+  .fill{height:100%;width:0;transition:width .4s}
+  .actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:28px}
+</style>
+</head>
+<body>
+<header>
+  <h1>CLASS FEEDBACK</h1>
+  <button id="loginBtn" class="link">관리자 로그인</button>
+</header>
+<main>
+  <section id="student">
+    <h2>오늘 수업은 어땠나요?</h2>
+    <div class="votes">
+      <button class="vote" data-r="satisfied">😊 만족</button>
+      <button class="vote" data-r="neutral">😐 보통</button>
+      <button class="vote" data-r="dissatisfied">😞 불만족</button>
+    </div>
+    <p id="msg"></p>
+  </section>
+
+  <section id="login" class="hidden">
+    <form id="loginForm">
+      <h2 style="margin:0">관리자 로그인</h2>
+      <input id="email" type="email" placeholder="이메일" required autocomplete="username">
+      <input id="password" type="password" placeholder="비밀번호" required autocomplete="current-password">
+      <button class="primary" type="submit">로그인</button>
+      <button class="gray" type="button" id="backBtn">돌아가기</button>
+      <p id="loginErr" class="err" style="margin:0"></p>
+    </form>
+  </section>
+
+  <section id="admin" class="hidden">
+    <h2>수업 만족도 결과</h2>
+    <div class="total">전체 투표 수: <b id="total">0</b></div>
+    <div class="row">😊 만족 <b id="c-satisfied">0</b>표 (<span id="p-satisfied">0</span>%)
+      <div class="bar"><div class="fill" id="b-satisfied" style="background:#10b981"></div></div></div>
+    <div class="row">😐 보통 <b id="c-neutral">0</b>표 (<span id="p-neutral">0</span>%)
+      <div class="bar"><div class="fill" id="b-neutral" style="background:#f59e0b"></div></div></div>
+    <div class="row">😞 불만족 <b id="c-dissatisfied">0</b>표 (<span id="p-dissatisfied">0</span>%)
+      <div class="bar"><div class="fill" id="b-dissatisfied" style="background:#ef4444"></div></div></div>
+    <p id="adminErr" class="err"></p>
+    <div class="actions">
+      <button class="primary" id="refreshBtn">새로고침</button>
+      <button class="danger" id="resetBtn">투표 결과 초기화</button>
+      <button class="gray" id="logoutBtn">로그아웃</button>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+const sb = supabase.createClient(window.APP_CONFIG.SUPABASE_URL, window.APP_CONFIG.SUPABASE_PUBLISHABLE_KEY);
+const $ = id => document.getElementById(id);
+const KEYS = ['satisfied','neutral','dissatisfied'];
+
+function show(name){
+  ['student','login','admin'].forEach(s => $(s).classList.toggle('hidden', s !== name));
+  $('loginBtn').classList.toggle('hidden', name !== 'student');
+}
+
+document.querySelectorAll('.vote').forEach(b => b.onclick = async () => {
+  const btns = document.querySelectorAll('.vote');
+  btns.forEach(x => x.disabled = true);
+  const { error } = await sb.from('votes').insert({ rating: b.dataset.r });
+  $('msg').className = error ? 'err' : 'ok';
+  $('msg').textContent = error ? '저장에 실패했습니다. 다시 시도해 주세요.' : '투표가 완료되었습니다. 감사합니다.';
+  btns.forEach(x => x.disabled = false);
+});
+
+$('loginBtn').onclick = () => show('login');
+$('backBtn').onclick = () => show('student');
+
+$('loginForm').onsubmit = async e => {
+  e.preventDefault();
+  $('loginErr').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email: $('email').value, password: $('password').value });
+  if (error) { $('loginErr').textContent = '로그인에 실패했습니다.'; return; }
+  $('password').value = '';
+  show('admin');
+  load();
+};
+
+async function load(){
+  $('adminErr').textContent = '';
+  const counts = {};
+  for (const k of KEYS) {
+    const { count, error } = await sb.from('votes').select('*', { count: 'exact', head: true }).eq('rating', k);
+    if (error) { $('adminErr').textContent = '결과를 불러오지 못했습니다.'; return; }
+    counts[k] = count || 0;
+  }
+  render(counts);
+}
+
+function render(c){
+  const total = KEYS.reduce((a, k) => a + c[k], 0);
+  $('total').textContent = total;
+  KEYS.forEach(k => {
+    const p = total ? Math.round(c[k] / total * 1000) / 10 : 0;
+    $('c-' + k).textContent = c[k];
+    $('p-' + k).textContent = p;
+    $('b-' + k).style.width = p + '%';
+  });
+}
+
+$('refreshBtn').onclick = load;
+
+$('resetBtn').onclick = async () => {
+  if (!confirm('모든 투표 결과를 초기화하시겠습니까? 삭제된 결과는 복구할 수 없습니다.')) return;
+  const { error } = await sb.from('votes').delete().not('id', 'is', null);
+  if (error) { $('adminErr').textContent = '초기화에 실패했습니다.'; return; }
+  render({ satisfied: 0, neutral: 0, dissatisfied: 0 });
+};
+
+$('logoutBtn').onclick = async () => {
+  await sb.auth.signOut();
+  $('msg').textContent = '';
+  show('student');
+};
+
+sb.auth.getSession().then(({ data }) => { if (data.session) { show('admin'); load(); } });
+</script>
+</body>
+</html>
